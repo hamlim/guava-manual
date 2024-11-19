@@ -1,9 +1,15 @@
 # Guava
 
-Rawdogging RSC with Vite + Hono
+> [!CAUTION]
+> Currently more of a spec than an implementation
+
+> Rawdogging RSC with Vite + Hono
 
 ## Features:
 
+- React Server Components
+- Server Functions/Actions/Mutations
+- API Routes
 - Routing
   - `fileName.page.tsx` -> RSC for `/${fileName}`
   - `fileName.route.tsx` -> Route handler for `/${fileName}` (handles all request methods)
@@ -59,5 +65,47 @@ import type {Store} from 'guava/types';
 
 export default async function doSomething(request: Request, context: Store['context']) {
   return new Response('Hello World!');
+}
+```
+
+#### Client APIs:
+
+> [!WARNING]
+> These aren't all implemented yet!
+
+**`useRouter: () => ClientRouter`** - A client side routing hook, provides a `ClientRouter` instance which can be used to read and to mutate the current route.
+
+Example:
+
+```tsx
+// ./src/components/like-button.tsx
+"use client";
+
+import {useRouter} from 'guava/client';
+
+type Props = {
+  likeAction: () => Promise<void>
+};
+
+export function LikeButton({likeAction: like}: Props) {
+  let router = useRouter()
+
+  async function likePost() {
+    try {
+      await like()
+      // refresh the current path
+      router.refresh(router.path)
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  return (
+    <button
+      formAction={likePost}
+    >
+      Like Post
+    </button>
+  );
 }
 ```
