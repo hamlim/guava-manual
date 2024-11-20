@@ -21,6 +21,7 @@
       - `/foo`
       - `/foo/bar`
       - `/foo/bar/...`
+  - Both `[name]` and `[...name]` conventions can be used as directory names as well, e.g. `/[slug]/comments.page.tsx` -> `/<any-path>/comments`
 
 ### "APIs":
 
@@ -109,3 +110,11 @@ export function LikeButton({likeAction: like}: Props) {
   );
 }
 ```
+
+
+### Conventions:
+
+These are conventions and are not strictly required when using guava:
+
+- Server functions / actions / mutations live within a `${name}.actions.ts` file
+  - Actions can be defined in any kind of file - but naming it with `.actions.ts` makes it clearer as to where the core app logic lives

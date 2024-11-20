@@ -13,7 +13,7 @@ export function createALSMiddleware(router: Router) {
 
     let params: Record<string, string | string[]> = {};
 
-    if (route && route.type === "dynamic") {
+    if (route && (route.type === "dynamic" || route.type === "catch-all")) {
       params = route.params;
     }
 
@@ -21,6 +21,8 @@ export function createALSMiddleware(router: Router) {
       request: context.req.raw,
       context: {
         params,
+        status: (status) =>
+          context.status(status as Parameters<Context["status"]>[0]),
       },
     };
 

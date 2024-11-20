@@ -2,38 +2,34 @@
 // Takes in a "manifest" of registered pages/routes
 // and returns a router that supports route matching
 
-type RouteParamTypes =
-  // `/foo/[single].page.tsx`
-  // matches to `/foo/anything`
-  // does not match to `/foo`, or `/foo/anything/else`
-  | {
-      type: "single";
-      value: string;
-    }
-  // `/foo/[...nested].page.tsx`
-  // matches to:
-  // - `/foo/anything`
-  // - `/foo/anything/else`
-  // does not match to `/foo`
-  | {
-      type: "nested";
-      value: string;
-    };
-
 type MatchedRoute =
   | {
       type: "static";
       path: string;
     }
   | {
+      // `/foo/[single].page.tsx`
+      // matches to `/foo/anything`
+      // does not match to `/foo`, or `/foo/anything/else`
       type: "dynamic";
       path: string;
-      params: Record<string, string | Array<string>>;
+      params: Record<string, string>;
+    }
+  | {
+      // `/foo/[...nested].page.tsx`
+      // matches to:
+      // - `/foo/anything`
+      // - `/foo/anything/else`
+      // does not match to `/foo`
+      type: "catch-all";
+      path: string;
+      params: Record<string, Array<string>>;
     };
 
 type Route =
   | { type: "static"; path: string }
-  | { type: "dynamic"; params: Array<RouteParamTypes>; path: string };
+  | { type: "dynamic"; params: Array<string>; path: string }
+  | { type: "catch-all"; params: Array<string>; path: string };
 
 export type RouteManifest = Array<Route>;
 
@@ -60,9 +56,12 @@ export class Router {
         let routePathIdx = 0;
         let requestedPathIdx = 0;
 
-        let matchedParams: Record<string, string | Array<string>> = {};
+        let matchedParams:
+          | Record<string, string>
+          | Record<string, Array<string>> = {};
 
         let matches = true;
+        let routeType: "dynamic" | "catch-all" = "dynamic";
 
         let overflowCount = 1000;
 
@@ -78,6 +77,7 @@ export class Router {
             routePathIdx++;
             requestedPathIdx++;
           } else if (routePathChunks[routePathIdx]?.startsWith("[...")) {
+            routeType = "catch-all";
             // Nested Dynamic segment
             // If the requested path is present, add it to the matched params
             // and continue
@@ -93,6 +93,7 @@ export class Router {
             // If the requested path is not present, break - this branch doesn't match!
             break;
           } else if (routePathChunks[routePathIdx]?.startsWith("[")) {
+            routeType = "dynamic";
             // Single Dynamic segment
             // If the requested path is present, add it to the matched params
             // and continue
@@ -115,10 +116,10 @@ export class Router {
 
         if (matches) {
           return {
-            type: "dynamic",
+            type: routeType,
             path: route.path,
             params: matchedParams,
-          };
+          } as MatchedRoute;
         }
       }
     }

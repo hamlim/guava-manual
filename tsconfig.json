@@ -15,7 +15,8 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "guava/types": ["lib/types"]
+      "guava/types": ["lib/types"],
+      "guava/client": ["lib/client"]
     },
 
     /* Linting */
