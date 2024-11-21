@@ -13,22 +13,12 @@ let router = new Router([
   {
     path: "/[id]",
     type: "dynamic",
-    params: [
-      {
-        type: "single",
-        value: "id",
-      },
-    ],
+    params: ["id"],
   },
   {
     path: "/[scope]/baz",
     type: "dynamic",
-    params: [
-      {
-        type: "single",
-        value: "scope",
-      },
-    ],
+    params: ["scope"],
   },
 ]);
 

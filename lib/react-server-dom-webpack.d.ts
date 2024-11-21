@@ -205,6 +205,7 @@ declare module "react-server-dom-webpack/server" {
     name: string;
   };
 
+  // biome-ignore lint/suspicious/noConfusingVoidType: <explanation>
   type ServerManifest = void;
   type ClientReferenceManifestEntry = ImportManifestEntry;
 
