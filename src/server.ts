@@ -1,28 +1,18 @@
 import { Hono } from "hono";
+import { createRSCGetHandler } from "lib/rsc-hono-handler";
 import { getStore } from "../lib/async-local-storage";
 import { createALSMiddleware } from "../lib/hono-async-local-storage-middleware";
-import { Router } from "../lib/router";
+import { type RouteManifest, Router } from "../lib/router";
 
 const app = new Hono();
 
-let router = new Router([
-  {
-    path: "/",
-    type: "static",
-  },
-  {
-    path: "/[id]",
-    type: "dynamic",
-    params: ["id"],
-  },
-  {
-    path: "/[scope]/baz",
-    type: "dynamic",
-    params: ["scope"],
-  },
-]);
+let routes = await import("../dist/route-manifest.json");
+
+let router = new Router(routes.default as RouteManifest);
 
 app.use(createALSMiddleware(router));
+
+app.get("*", await createRSCGetHandler(router));
 
 app.get("/", async (c) => {
   let store = getStore();

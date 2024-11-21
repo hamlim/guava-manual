@@ -1,8 +1,10 @@
 import { exec } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join as pathJoin } from "node:path";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join as pathJoin } from "node:path";
 import { promisify } from "node:util";
 import glob from "fast-glob";
+import oxc from "oxc-transform";
 
 let execPromise = promisify(exec);
 
@@ -41,8 +43,8 @@ Options:
   process.exit(0);
 }
 
-let outDir = args.outDir || "./dist"; // pathJoin(process.cwd(), args.outDir || "./dist");
-let rootDir = args.rootDir || "./src"; // pathJoin(process.cwd(), args.rootDir || "./src");
+let outDir = pathJoin(process.cwd(), args.outDir || "./dist");
+let rootDir = pathJoin(process.cwd(), args.rootDir || "./src");
 
 // @NOTE: Do I need to do this?
 // if (args.dev) {
@@ -70,6 +72,10 @@ let rootDir = args.rootDir || "./src"; // pathJoin(process.cwd(), args.rootDir |
 //     );
 //   }
 // }
+
+if (existsSync(outDir)) {
+  await rm(outDir, { recursive: true });
+}
 
 let mkdirDistResult = await safely(mkdir(outDir, { recursive: true }));
 if (mkdirDistResult.status === "rejected") {
@@ -120,7 +126,8 @@ for (let file of routeFiles) {
           distPath: pathJoin(
             outDir,
             file.replace(rootDir, "").replace(/\.(ts|tsx|js|jsx)$/, ".js"),
-          ),
+          ).replace(process.cwd(), "."),
+          srcPath: file.replace(process.cwd(), "."),
         });
         break;
       }
@@ -141,7 +148,8 @@ for (let file of routeFiles) {
         distPath: pathJoin(
           outDir,
           file.replace(rootDir, "").replace(/\.(ts|tsx|js|jsx)$/, ".js"),
-        ),
+        ).replace(process.cwd(), "."),
+        srcPath: file.replace(process.cwd(), "."),
       });
     }
   } else {
@@ -154,7 +162,8 @@ for (let file of routeFiles) {
       distPath: pathJoin(
         outDir,
         file.replace(rootDir, "").replace(/\.(ts|tsx|js|jsx)$/, ".js"),
-      ),
+      ).replace(process.cwd(), "."),
+      srcPath: file.replace(process.cwd(), "."),
     });
   }
 }
@@ -178,10 +187,14 @@ if (writeRouteManifestResult.status === "rejected") {
 
 // Write server component entrypoint manifest
 
+let serverComponentEntrypoints = [
+  ...serverComponentEntrypointManifest.values(),
+];
+
 let writeServerComponentEntrypointManifestResult = await safely(
   writeFile(
     pathJoin(outDir, "server-component-entrypoint-manifest.json"),
-    JSON.stringify([...serverComponentEntrypointManifest.values()]),
+    JSON.stringify(serverComponentEntrypoints),
   ),
 );
 if (writeServerComponentEntrypointManifestResult.status === "rejected") {
@@ -190,4 +203,53 @@ if (writeServerComponentEntrypointManifestResult.status === "rejected") {
   );
   console.error(writeServerComponentEntrypointManifestResult.reason);
   process.exit(1);
+}
+
+// Do build
+
+let allFilesResult = await safely(
+  glob(pathJoin(rootDir, "**/*.{ts,tsx,js,jsx}")),
+);
+if (allFilesResult.status === "rejected") {
+  console.error(`Failed to collect all files: ${rootDir}`);
+  console.error(allFilesResult.reason);
+  process.exit(1);
+}
+
+let allFiles = allFilesResult.value;
+
+for (let srcFile of allFiles) {
+  let distPath = srcFile
+    .replace(rootDir, outDir)
+    .replace(process.cwd(), ".")
+    // replace tsx/jsx/ts extensions with js
+    .replace(/\.(tsx|ts)/, ".js");
+
+  let distDir = dirname(distPath);
+
+  let mkdirDistDirResult = await safely(mkdir(distDir, { recursive: true }));
+  if (mkdirDistDirResult.status === "rejected") {
+    console.error(`Failed to create dist directory: ${distDir}`);
+    console.error(mkdirDistDirResult.reason);
+    process.exit(1);
+  }
+
+  let sourceFileResult = await safely(readFile(srcFile, "utf-8"));
+  if (sourceFileResult.status === "rejected") {
+    console.error(`Failed to read source file: ${srcFile}`);
+    console.error(sourceFileResult.reason);
+    process.exit(1);
+  }
+
+  let sourceFile = sourceFileResult.value;
+
+  let { code, errors } = oxc.transform(srcFile, sourceFile);
+
+  let distResult = await safely(writeFile(distPath, code));
+  if (distResult.status === "rejected") {
+    console.error(`Failed to write dist file: ${distPath}`);
+    console.error(errors);
+    console.error(distResult.reason);
+    process.exit(1);
+  }
 }
