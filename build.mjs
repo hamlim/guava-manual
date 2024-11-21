@@ -44,91 +44,106 @@ Options:
   process.exit(0);
 }
 
+let outDir = pathJoin(process.cwd(), args.outDir || "./dist");
+let rootDir = pathJoin(process.cwd(), args.rootDir || "./src");
+
 if (args.dev) {
-  dev();
-} else {
-  build();
-}
+  // @TODO: support bun and deno as well
+  let runtime = "node";
 
-async function dev() {
-  await exec(`vite-node -c vite-node.config.ts -w ./src/node-server.tsx`);
-}
+  let isDevServerRunning = false;
 
-async function build() {
-  let outDir = pathJoin(process.cwd(), args.outDir || "./dist");
-  let rootDir = pathJoin(process.cwd(), args.rootDir || "./src");
-  let mkdirDistResult = await safely(mkdir(outDir, { recursive: true }));
-  if (mkdirDistResult.status === "rejected") {
-    console.error(`Failed to create output directory: ${outDir}`);
-    process.exit(1);
+  // check if dev server is running
+  let result = await safely(fetch("http://127.0.0.1:42069/config"));
+  if (result.status === "fulfilled") {
+    let res = result.value;
+    if (!res.ok || res.status !== 200) {
+      isDevServerRunning = false;
+    } else {
+      isDevServerRunning = true;
+    }
+  } else {
+    isDevServerRunning = false;
   }
 
-  // collect routes
-  // collect routes from src directory
-  let routeFiles = await glob(
-    pathJoin(rootDir, "**/*.{route,page}.{ts,tsx,js,jsx}"),
-  );
+  if (!isDevServerRunning) {
+    await execPromise(
+      `${runtime} ${pathJoin(process.cwd(), "dev-server.mjs")} --outDir=${outDir} --rootDir=${rootDir}`,
+    );
+  }
+}
 
-  let routeManifest = new Map(/*<string, Route>*/);
+let mkdirDistResult = await safely(mkdir(outDir, { recursive: true }));
+if (mkdirDistResult.status === "rejected") {
+  console.error(`Failed to create output directory: ${outDir}`);
+  process.exit(1);
+}
 
-  for (let file of routeFiles) {
-    // strip src/ prefix and file extension to get route path
-    let routePath = file
-      .replace(rootDir, "")
-      .replace(/\.(route|page)\.(ts|tsx|js|jsx)$/, "")
-      .replace(/\/index$/, "/");
+// collect routes
+// collect routes from src directory
+let routeFiles = await glob(
+  pathJoin(rootDir, "**/*.{route,page}.{ts,tsx,js,jsx}"),
+);
 
-    // check if path contains dynamic segments
-    if (routePath.includes("[")) {
-      let params = [];
-      let pathParts = routePath.split("/");
+let routeManifest = new Map(/*<string, Route>*/);
 
-      for (let part of pathParts) {
-        if (part.startsWith("[...")) {
-          // catch-all segment
-          params.push(part.slice(4, -1));
-          routeManifest.set(routePath, {
-            type: "catch-all",
-            path: routePath,
-            params,
-          });
-          break;
-        }
-        if (part.startsWith("[")) {
-          // dynamic segment
-          params.push(part.slice(1, -1));
-        }
-      }
+for (let file of routeFiles) {
+  // strip src/ prefix and file extension to get route path
+  let routePath = file
+    .replace(rootDir, "")
+    .replace(/\.(route|page)\.(ts|tsx|js|jsx)$/, "")
+    .replace(/\/index$/, "/");
 
-      if (!routeManifest.has(routePath)) {
+  // check if path contains dynamic segments
+  if (routePath.includes("[")) {
+    let params = [];
+    let pathParts = routePath.split("/");
+
+    for (let part of pathParts) {
+      if (part.startsWith("[...")) {
+        // catch-all segment
+        params.push(part.slice(4, -1));
         routeManifest.set(routePath, {
-          type: "dynamic",
+          type: "catch-all",
           path: routePath,
           params,
         });
+        break;
       }
-    } else {
+      if (part.startsWith("[")) {
+        // dynamic segment
+        params.push(part.slice(1, -1));
+      }
+    }
+
+    if (!routeManifest.has(routePath)) {
       routeManifest.set(routePath, {
-        type: "static",
+        type: "dynamic",
         path: routePath,
+        params,
       });
     }
+  } else {
+    routeManifest.set(routePath, {
+      type: "static",
+      path: routePath,
+    });
   }
+}
 
-  let writeRouteManifestResult = await safely(
-    writeFile(
-      pathJoin(outDir, "route-manifest.json"),
-      JSON.stringify([...routeManifest.values()]),
-    ),
+let writeRouteManifestResult = await safely(
+  writeFile(
+    pathJoin(outDir, "route-manifest.json"),
+    JSON.stringify([...routeManifest.values()]),
+  ),
+);
+if (writeRouteManifestResult.status === "rejected") {
+  console.error(
+    `Failed to write route manifest: ${pathJoin(outDir, "route-manifest.json")}`,
   );
-  if (writeRouteManifestResult.status === "rejected") {
-    console.error(
-      `Failed to write route manifest: ${pathJoin(outDir, "route-manifest.json")}`,
-    );
-    console.error(writeRouteManifestResult.reason);
-    console.error(
-      `Route Manifest: ${JSON.stringify([...routeManifest.values()])}`,
-    );
-    process.exit(1);
-  }
+  console.error(writeRouteManifestResult.reason);
+  console.error(
+    `Route Manifest: ${JSON.stringify([...routeManifest.values()])}`,
+  );
+  process.exit(1);
 }
