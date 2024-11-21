@@ -1,6 +1,7 @@
 import type { PageProps } from "guava/types";
 import { LikeButton } from "./components/like-button";
 import { likePost } from "./index.actions";
+import "./styles.css";
 
 export default async function IndexPage({ request, context }: PageProps) {
   return (
